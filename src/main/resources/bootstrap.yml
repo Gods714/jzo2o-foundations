@@ -54,7 +54,7 @@ spring:
 mysql:
   db-name: jzo2o-foundations
 mybatis:
-  mapper-locations: mapper/*.xml
+  mapper-locations: map per/*.xml
   type-aliases-package: com.jzo2o.foundations.mapper
 swagger:
   enable: true
