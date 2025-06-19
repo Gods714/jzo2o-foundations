@@ -10,13 +10,8 @@ import com.jzo2o.common.expcetions.ForbiddenOperationException;
 import com.jzo2o.common.model.PageResult;
 import com.jzo2o.foundations.constants.RedisConstants;
 import com.jzo2o.foundations.enums.FoundationStatusEnum;
-import com.jzo2o.foundations.mapper.RegionMapper;
-import com.jzo2o.foundations.mapper.ServeItemMapper;
-import com.jzo2o.foundations.mapper.ServeMapper;
-import com.jzo2o.foundations.model.domain.Region;
-import com.jzo2o.foundations.model.domain.Serve;
-import com.jzo2o.foundations.model.domain.ServeItem;
-import com.jzo2o.foundations.model.domain.ServeSync;
+import com.jzo2o.foundations.mapper.*;
+import com.jzo2o.foundations.model.domain.*;
 import com.jzo2o.foundations.model.dto.request.ServePageQueryReqDTO;
 import com.jzo2o.foundations.model.dto.request.ServeUpsertReqDTO;
 import com.jzo2o.foundations.model.dto.response.ServeResDTO;
@@ -49,6 +44,11 @@ public class ServeServiceImpl extends ServiceImpl<ServeMapper, Serve> implements
     @Resource
     private RegionMapper regionMapper;
 
+    @Resource
+    private ServeSyncMapper serveSyncMapper;
+
+    @Resource
+    private ServeTypeMapper serveTypeMapper;
 
     /**
      * 查询服务项详情缓存
@@ -164,6 +164,9 @@ public class ServeServiceImpl extends ServiceImpl<ServeMapper, Serve> implements
                 .eq(Serve::getId, id)
                 .set(Serve::getSaleStatus, FoundationStatusEnum.ENABLE.getStatus());
         update(updateWrapper);
+
+        // 添加服务同步到es
+        addServeSync(id);
         return baseMapper.selectById(id);
 
     }
@@ -187,6 +190,9 @@ public class ServeServiceImpl extends ServiceImpl<ServeMapper, Serve> implements
                 .eq(Serve::getId, id)
                 .set(Serve::getSaleStatus, FoundationStatusEnum.DISABLE.getStatus());
         update(updateWrapper);
+
+        // 删除服务同步到es
+        serveSyncMapper.deleteById(id);
         return baseMapper.selectById(id);
     }
 
@@ -238,6 +244,43 @@ public class ServeServiceImpl extends ServiceImpl<ServeMapper, Serve> implements
                 .eq(Serve::getServeItemId, serveItemId)
                 .eq(ObjectUtil.isNotEmpty(saleStatus), Serve::getSaleStatus, saleStatus);
         return baseMapper.selectCount(queryWrapper);
+    }
+
+    /**
+     * 新增服务同步数据
+     *
+     * @param serveId 服务id
+     */
+    private void addServeSync(Long serveId) {
+        //服务信息
+        Serve serve = baseMapper.selectById(serveId);
+        //区域信息
+        Region region = regionMapper.selectById(serve.getRegionId());
+        //服务项信息
+        ServeItem serveItem = serveItemMapper.selectById(serve.getServeItemId());
+        //服务类型
+        ServeType serveType = serveTypeMapper.selectById(serveItem.getServeTypeId());
+
+        ServeSync serveSync = new ServeSync();
+        serveSync.setServeTypeId(serveType.getId());
+        serveSync.setServeTypeName(serveType.getName());
+        serveSync.setServeTypeIcon(serveType.getServeTypeIcon());
+        serveSync.setServeTypeImg(serveType.getImg());
+        serveSync.setServeTypeSortNum(serveType.getSortNum());
+
+        serveSync.setServeItemId(serveItem.getId());
+        serveSync.setServeItemIcon(serveItem.getServeItemIcon());
+        serveSync.setServeItemName(serveItem.getName());
+        serveSync.setServeItemImg(serveItem.getImg());
+        serveSync.setServeItemSortNum(serveItem.getSortNum());
+        serveSync.setUnit(serveItem.getUnit());
+        serveSync.setDetailImg(serveItem.getDetailImg());
+        serveSync.setPrice(serve.getPrice());
+
+        serveSync.setCityCode(region.getCityCode());
+        serveSync.setId(serve.getId());
+        serveSync.setIsHot(serve.getIsHot());
+        serveSyncMapper.insert(serveSync);
     }
 
 }
